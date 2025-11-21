@@ -2,6 +2,8 @@ package internal
 
 import (
 	"os"
+	"log"
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -16,6 +18,11 @@ type Config struct {
 
 
 func LoadConfig() *Config {
+
+	if err := godotenv.Load("../.env"); err != nil {
+		log.Println("No .env file found, using system environment variables")
+	}
+
 	return &Config{
 		UserName:   os.Getenv("DB_USERNAME"),
 		Password:   os.Getenv("DB_PASSWORD"),
