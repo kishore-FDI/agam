@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/joho/godotenv"
-	"privateCloud/internal"
+	"github.com/venkataramanakb/agam/internal"
 )
 
 func main() {
