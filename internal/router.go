@@ -23,6 +23,10 @@ func SetupRouter(db *gorm.DB, minio *minio.Client, bucketName string) http.Handl
 	r.Delete("/vaults/delete", DeleteVaultHandler(db))
 	r.Get("/vaults", ListVaultsHandler(db))
 
+	// Device routes
+	r.Post("/devices/register", RegisterDeviceHandler(db))
+	r.Get("/devices/sync", SyncChangesHandler(db))
+
 	// File routes
 	r.Post("/files/upload", UploadFileHandler(db, minio, bucketName))
 	r.Delete("/files/delete", DeleteFileHandler(db, minio, bucketName))

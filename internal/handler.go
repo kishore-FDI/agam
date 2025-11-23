@@ -5,6 +5,7 @@ import (
     "io"
     "net/http"
     "path/filepath"
+    "time"
 
     "github.com/google/uuid"
     "github.com/minio/minio-go/v7"
@@ -195,6 +196,19 @@ func UploadFileHandler(db *gorm.DB, minioClient *minio.Client, bucketName string
             folderID = &parsed
         }
 
+        // Get device_id (required)
+        deviceIDStr := r.FormValue("device_id")
+        if deviceIDStr == "" {
+            http.Error(w, "device_id is required", http.StatusBadRequest)
+            return
+        }
+
+        deviceID, err := uuid.Parse(deviceIDStr)
+        if err != nil {
+            http.Error(w, "invalid device_id", http.StatusBadRequest)
+            return
+        }
+
         // Read file data
         fileData, err := io.ReadAll(file)
         if err != nil {
@@ -238,7 +252,7 @@ func UploadFileHandler(db *gorm.DB, minioClient *minio.Client, bucketName string
         }
 
         // Upload file
-        uploadedFile, err := UploadFile(db, minioClient, bucketName, fileInput, fileData, contentType)
+        uploadedFile, err := UploadFile(db, minioClient, bucketName, fileInput, fileData, contentType, deviceID)
         if err != nil {
             http.Error(w, err.Error(), http.StatusBadRequest)
             return
@@ -254,9 +268,10 @@ func DeleteFileHandler(db *gorm.DB, minioClient *minio.Client, bucketName string
     return func(w http.ResponseWriter, r *http.Request) {
         fileIDStr := r.URL.Query().Get("file_id")
         vaultIDStr := r.URL.Query().Get("vault_id")
+        deviceIDStr := r.URL.Query().Get("device_id")
 
-        if fileIDStr == "" || vaultIDStr == "" {
-            http.Error(w, "file_id and vault_id are required", http.StatusBadRequest)
+        if fileIDStr == "" || vaultIDStr == "" || deviceIDStr == "" {
+            http.Error(w, "file_id, vault_id, and device_id are required", http.StatusBadRequest)
             return
         }
 
@@ -272,12 +287,74 @@ func DeleteFileHandler(db *gorm.DB, minioClient *minio.Client, bucketName string
             return
         }
 
-        if err := DeleteFile(db, minioClient, bucketName, fileID, vaultID); err != nil {
+        deviceID, err := uuid.Parse(deviceIDStr)
+        if err != nil {
+            http.Error(w, "invalid device_id", http.StatusBadRequest)
+            return
+        }
+
+        if err := DeleteFile(db, minioClient, bucketName, fileID, vaultID, deviceID); err != nil {
             http.Error(w, err.Error(), http.StatusBadRequest)
             return
         }
 
         w.WriteHeader(http.StatusNoContent)
+    }
+}
+
+func RegisterDeviceHandler(db *gorm.DB) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        var input Device
+        if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+            http.Error(w, "invalid JSON body", http.StatusBadRequest)
+            return
+        }
+
+        device, err := RegisterDevice(db, input)
+        if err != nil {
+            http.Error(w, err.Error(), http.StatusBadRequest)
+            return
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusCreated)
+        json.NewEncoder(w).Encode(device)
+    }
+}
+
+func SyncChangesHandler(db *gorm.DB) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        deviceIDStr := r.URL.Query().Get("device_id")
+        if deviceIDStr == "" {
+            http.Error(w, "device_id is required", http.StatusBadRequest)
+            return
+        }
+
+        deviceID, err := uuid.Parse(deviceIDStr)
+        if err != nil {
+            http.Error(w, "invalid device_id", http.StatusBadRequest)
+            return
+        }
+
+        // Optional last_sync_time parameter (RFC3339 format)
+        var lastSyncTime *time.Time
+        if lastSyncStr := r.URL.Query().Get("last_sync_time"); lastSyncStr != "" {
+            parsed, err := time.Parse(time.RFC3339, lastSyncStr)
+            if err != nil {
+                http.Error(w, "invalid last_sync_time format (use RFC3339)", http.StatusBadRequest)
+                return
+            }
+            lastSyncTime = &parsed
+        }
+
+        changes, err := SyncChanges(db, deviceID, lastSyncTime)
+        if err != nil {
+            http.Error(w, err.Error(), http.StatusBadRequest)
+            return
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        json.NewEncoder(w).Encode(changes)
     }
 }
 

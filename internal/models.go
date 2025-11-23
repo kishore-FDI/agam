@@ -15,6 +15,8 @@ type User struct {
 	Phone            int       `gorm:"unique;not null"`
 	Password         string    `gorm:"type:text;not null"`
 	CreatedTimestamp time.Time `gorm:"autoCreateTime"`
+
+	Devices []Device `gorm:"foreignKey:UserID"`
 }
 
 // Vault represents the vault table
@@ -57,13 +59,27 @@ type File struct {
 	Logs  []SyncLog
 }
 
+// Device represents the device table
+type Device struct {
+	ID               uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	Name             string    `gorm:"type:text;not null"`
+	UserID           int64     `gorm:"not null;index"`
+	CreatedTimestamp time.Time `gorm:"autoCreateTime"`
+
+	User     User      `gorm:"foreignKey:UserID"`
+	SyncLogs []SyncLog `gorm:"foreignKey:DeviceID"`
+}
+
 // SyncLog represents the sync_log table
 type SyncLog struct {
-	ID       uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	VaultID  uuid.UUID `gorm:"type:uuid;not null;index"`
-	FolderID   uuid.UUID `gorm:"type:uuid"`
-	FileID   *uuid.UUID `gorm:"type:uuid;index"`
-	Action   string    `gorm:"type:text;not null"`
-	Vault    Vault     `gorm:"foreignKey:VaultID;constraint:OnDelete:CASCADE"`
-	File     *File     `gorm:"foreignKey:FileID"`
+	ID          uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	VaultID     uuid.UUID  `gorm:"type:uuid;not null;index"`
+	FolderID    uuid.UUID  `gorm:"type:uuid"`
+	FileID      *uuid.UUID `gorm:"type:uuid;index"`
+	DeviceID    uuid.UUID  `gorm:"type:uuid;not null;index"`
+	Action      string     `gorm:"type:text;not null"`
+	LastUpdated time.Time  `gorm:"type:timestamp;not null;default:now()"`
+	Vault       Vault      `gorm:"foreignKey:VaultID;constraint:OnDelete:CASCADE"`
+	File        *File      `gorm:"foreignKey:FileID"`
+	Device      Device     `gorm:"foreignKey:DeviceID"`
 }

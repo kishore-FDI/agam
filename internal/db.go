@@ -28,6 +28,7 @@ func InitDB(cfg *Config) *gorm.DB {
 		&User{},
 		&Vault{},
 		&File{},
+		&Device{},
 		&SyncLog{},
 	)
 	if err != nil {
