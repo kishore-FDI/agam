@@ -13,18 +13,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// Response DTOs with URLs
-type FileResponse struct {
-	File
-	ThumbnailURL string `json:"thumbnail_url,omitempty"`
-	ImageURL     string `json:"image_url,omitempty"`
-}
-
-type VaultResponse struct {
-	Vault
-	Files []FileResponse `json:"files"`
-}
-
 
 func CreateUser(db *gorm.DB, input User) (*User, error) {
 
@@ -119,118 +107,15 @@ func DeleteVault(db *gorm.DB, vaultID uuid.UUID, userID uuid.UUID) error {
 	return nil
 }
 
-// GeneratePresignedURL generates a presigned URL for a MinIO object
-func GeneratePresignedURL(minioClient *minio.Client, bucketName, objectKey string, expiry time.Duration) (string, error) {
-	ctx := context.Background()
-	url, err := minioClient.PresignedGetObject(ctx, bucketName, objectKey, expiry, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate presigned URL: %w", err)
-	}
-	return url.String(), nil
-}
+func ListVaults(db *gorm.DB, userID uuid.UUID) ([]Vault, error) {
+    var vaults []Vault
 
-func ListVaults(db *gorm.DB, minioClient *minio.Client, bucketName string, userID uuid.UUID) ([]VaultResponse, error) {
-	var vaults []Vault
+    // Fetch all vaults belonging to the user
+    if err := db.Where("user_id = ?", userID).Find(&vaults).Error; err != nil {
+        return nil, fmt.Errorf("failed to fetch vaults: %w", err)
+    }
 
-	// Fetch all vaults belonging to the user with their files
-	if err := db.Where("user_id = ?", userID).Preload("Files").Find(&vaults).Error; err != nil {
-		return nil, fmt.Errorf("failed to fetch vaults: %w", err)
-	}
-
-	// Convert to response format with thumbnail URLs
-	vaultResponses := make([]VaultResponse, len(vaults))
-	for i, vault := range vaults {
-		fileResponses := make([]FileResponse, len(vault.Files))
-		for j, file := range vault.Files {
-			fileResp := FileResponse{File: file}
-			
-			// Generate thumbnail URL if thumbnail exists
-			if file.Thumbnail != "" {
-				thumbnailURL, err := GeneratePresignedURL(minioClient, bucketName, file.Thumbnail, 1*time.Hour)
-				if err == nil {
-					fileResp.ThumbnailURL = thumbnailURL
-				}
-			} else {
-				// If no thumbnail, use the full image as thumbnail
-				thumbnailURL, err := GeneratePresignedURL(minioClient, bucketName, file.MinioKey, 1*time.Hour)
-				if err == nil {
-					fileResp.ThumbnailURL = thumbnailURL
-				}
-			}
-			
-			fileResponses[j] = fileResp
-		}
-		vaultResponses[i] = VaultResponse{
-			Vault: vault,
-			Files: fileResponses,
-		}
-	}
-
-	return vaultResponses, nil
-}
-
-func GetVault(db *gorm.DB, minioClient *minio.Client, bucketName string, vaultID uuid.UUID, userID uuid.UUID) (*VaultResponse, error) {
-	var vault Vault
-	
-	// Fetch vault with files, ensuring it belongs to the user
-	if err := db.Where("id = ? AND user_id = ?", vaultID, userID).Preload("Files").First(&vault).Error; err != nil {
-		return nil, errors.New("vault not found or not owned by user")
-	}
-
-	// Convert to response format with thumbnail URLs
-	fileResponses := make([]FileResponse, len(vault.Files))
-	for i, file := range vault.Files {
-		fileResp := FileResponse{File: file}
-		
-		// Generate thumbnail URL if thumbnail exists
-		if file.Thumbnail != "" {
-			thumbnailURL, err := GeneratePresignedURL(minioClient, bucketName, file.Thumbnail, 1*time.Hour)
-			if err == nil {
-				fileResp.ThumbnailURL = thumbnailURL
-			}
-		} else {
-			// If no thumbnail, use the full image as thumbnail
-			thumbnailURL, err := GeneratePresignedURL(minioClient, bucketName, file.MinioKey, 1*time.Hour)
-			if err == nil {
-				fileResp.ThumbnailURL = thumbnailURL
-			}
-		}
-		
-		fileResponses[i] = fileResp
-	}
-
-	return &VaultResponse{
-		Vault: vault,
-		Files: fileResponses,
-	}, nil
-}
-
-func GetFile(db *gorm.DB, minioClient *minio.Client, bucketName string, fileID uuid.UUID, vaultID uuid.UUID) (*FileResponse, error) {
-	var file File
-	
-	// Fetch file, ensuring it belongs to the vault
-	if err := db.Where("id = ? AND vault_id = ?", fileID, vaultID).First(&file).Error; err != nil {
-		return nil, errors.New("file not found or not in this vault")
-	}
-
-	fileResp := FileResponse{File: file}
-	
-	// Generate full image URL
-	imageURL, err := GeneratePresignedURL(minioClient, bucketName, file.MinioKey, 1*time.Hour)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate image URL: %w", err)
-	}
-	fileResp.ImageURL = imageURL
-	
-	// Generate thumbnail URL if thumbnail exists
-	if file.Thumbnail != "" {
-		thumbnailURL, err := GeneratePresignedURL(minioClient, bucketName, file.Thumbnail, 1*time.Hour)
-		if err == nil {
-			fileResp.ThumbnailURL = thumbnailURL
-		}
-	}
-
-	return &fileResp, nil
+    return vaults, nil
 }
 
 func UploadFile(db *gorm.DB, minioClient *minio.Client, bucketName string, input File, fileData []byte, contentType string) (*File, error) {

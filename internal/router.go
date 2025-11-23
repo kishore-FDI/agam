@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupRouter(db *gorm.DB, minio *minio.Client) http.Handler {
+func SetupRouter(db *gorm.DB, minio *minio.Client, bucketName string) http.Handler {
 	r := chi.NewRouter()
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -22,6 +22,10 @@ func SetupRouter(db *gorm.DB, minio *minio.Client) http.Handler {
 	r.Put("/vaults/update", UpdateVaultHandler(db))
 	r.Delete("/vaults/delete", DeleteVaultHandler(db))
 	r.Get("/vaults", ListVaultsHandler(db))
+
+	// File routes
+	r.Post("/files/upload", UploadFileHandler(db, minio, bucketName))
+	r.Delete("/files/delete", DeleteFileHandler(db, minio, bucketName))
 
 	return r
 }
