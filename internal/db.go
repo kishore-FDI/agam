@@ -32,7 +32,7 @@ func InitDB(cfg *Config) *gorm.DB {
 		&SyncLog{},
 	)
 	if err != nil {
-		log.Fatalf("failed to auto-migrate database: %v", err)
+		log.Fatalf("failed to auto-migrate: %v", err)
 	}
 
 	log.Println("Database connection successful and migrated!")

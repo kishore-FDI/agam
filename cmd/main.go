@@ -16,7 +16,12 @@ func main() {
 	db := internal.InitDB(cfg)
 	minioClient := internal.InitMinio(cfg)
 
-	r := internal.SetupRouter(db, minioClient, cfg.MinioBucket)
+	// Ensure JWT secret is set
+	if cfg.JWTSecret == "" {
+		log.Fatal("JWT_SECRET environment variable is required")
+	}
+
+	r := internal.SetupRouter(db, minioClient, cfg.MinioBucket, cfg.JWTSecret, cfg)
 
 	log.Println("Server running on :8080")
 	http.ListenAndServe(":8080", r)

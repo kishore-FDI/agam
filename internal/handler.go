@@ -375,3 +375,111 @@ func isImageContentType(contentType string) bool {
     }
     return false
 }
+
+// LoginRequest represents the login request body
+type LoginRequest struct {
+    Email    string `json:"email"`
+    Password string `json:"password"`
+}
+
+// LoginResponse represents the login response
+type LoginResponse struct {
+    Message string `json:"message"`
+    UserID  int64  `json:"user_id"`
+}
+
+// VerifyOTPRequest represents the OTP verification request
+type VerifyOTPRequest struct {
+    UserID int64  `json:"user_id"`
+    OTP    string `json:"otp"`
+}
+
+// VerifyOTPResponse represents the OTP verification response with JWT token
+type VerifyOTPResponse struct {
+    Token string `json:"token"`
+    UserID int64 `json:"user_id"`
+    Email  string `json:"email"`
+}
+
+// LoginHandler handles login - validates password and sends OTP
+func LoginHandler(db *gorm.DB, cfg *Config) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        var req LoginRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+            http.Error(w, "invalid JSON body", http.StatusBadRequest)
+            return
+        }
+
+        // Find user by email
+        var user User
+        if err := db.Where("email = ?", req.Email).First(&user).Error; err != nil {
+            http.Error(w, "invalid email or password", http.StatusUnauthorized)
+            return
+        }
+
+        // Validate password
+        if err := ValidatePassword(user.Password, req.Password); err != nil {
+            http.Error(w, "invalid email or password", http.StatusUnauthorized)
+            return
+        }
+
+        // Send OTP
+        _, err := SendOTP(cfg, user.ID, user.Email)
+        if err != nil {
+            http.Error(w, "failed to send OTP: "+err.Error(), http.StatusInternalServerError)
+            return
+        }
+
+        // Return success response
+        response := LoginResponse{
+            Message: "OTP sent to your email address",
+            UserID:  user.ID,
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        json.NewEncoder(w).Encode(response)
+    }
+}
+
+// VerifyOTPHandler handles OTP verification and returns JWT token
+func VerifyOTPHandler(db *gorm.DB, jwtSecret string) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        var req VerifyOTPRequest
+        if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+            http.Error(w, "invalid JSON body", http.StatusBadRequest)
+            return
+        }
+
+        // Verify OTP
+        if err := VerifyOTP(req.UserID, req.OTP); err != nil {
+            http.Error(w, err.Error(), http.StatusUnauthorized)
+            return
+        }
+
+        // Get user details
+        var user User
+        if err := db.Where("id = ?", req.UserID).First(&user).Error; err != nil {
+            http.Error(w, "user not found", http.StatusNotFound)
+            return
+        }
+
+        // Generate JWT token
+        token, err := GenerateJWT(user.ID, user.Email, jwtSecret)
+        if err != nil {
+            http.Error(w, "failed to generate token: "+err.Error(), http.StatusInternalServerError)
+            return
+        }
+
+        // Return token
+        response := VerifyOTPResponse{
+            Token:  token,
+            UserID: user.ID,
+            Email:  user.Email,
+        }
+
+        w.Header().Set("Content-Type", "application/json")
+        w.WriteHeader(http.StatusOK)
+        json.NewEncoder(w).Encode(response)
+    }
+}

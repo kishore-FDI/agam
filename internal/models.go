@@ -25,7 +25,7 @@ type Vault struct {
 	Name             string    `gorm:"type:text;not null"`
 	Type             string    `gorm:"type:text;not null"`
 	CreatedTimestamp time.Time `gorm:"autoCreateTime"`
-	UserId			uuid.UUID `gorm:"type:uuid;not null"`
+	UserId			int64 `gorm:"not null;index"`
 
 	Files []File `gorm:"constraint:OnDelete:CASCADE;foreignKey:VaultID"`
 	Logs  []SyncLog
