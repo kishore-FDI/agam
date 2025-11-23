@@ -17,5 +17,11 @@ func SetupRouter(db *gorm.DB, minio *minio.Client) http.Handler {
 
 	// Add routes that use db and minio
 
+	r.Post("/users", CreateUserHandler(db))
+	r.Post("/vaults/create", CreateVaultHandler(db))
+	r.Put("/vaults/update", UpdateVaultHandler(db))
+	r.Delete("/vaults/delete", DeleteVaultHandler(db))
+	r.Get("/vaults", ListVaultsHandler(db))
+
 	return r
 }

@@ -23,11 +23,22 @@ type Vault struct {
 	Name             string    `gorm:"type:text;not null"`
 	Type             string    `gorm:"type:text;not null"`
 	CreatedTimestamp time.Time `gorm:"autoCreateTime"`
+	UserId			uuid.UUID `gorm:"type:uuid;not null"`
 
 	Files []File `gorm:"constraint:OnDelete:CASCADE;foreignKey:VaultID"`
 	Logs  []SyncLog
 }
 
+type Folder struct{
+	ID 				uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid"`
+	Name 			string `gorm:"type:text;not null"`
+	Description 	string    `gorm:"type:text;not null"`
+	CreatedTimestamp time.Time `gorm:"autoCreateTime"`
+
+	Files []File `gorm:"constraint:OnDelete:CASCADE;foreignKey:VaultID"`
+	Logs  []SyncLog
+
+}
 // File represents the file table
 type File struct {
 	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
@@ -40,6 +51,8 @@ type File struct {
 	MinioKey  string `gorm:"type:text;not null"`
 	Thumbnail string `gorm:"type:text"`
 
+	FolderID   uuid.UUID `gorm:"type:uuid;index"`
+
 	Vault Vault `gorm:"foreignKey:VaultID;constraint:OnDelete:CASCADE"`
 	Logs  []SyncLog
 }
@@ -48,6 +61,7 @@ type File struct {
 type SyncLog struct {
 	ID       uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	VaultID  uuid.UUID `gorm:"type:uuid;not null;index"`
+	FolderID   uuid.UUID `gorm:"type:uuid"`
 	FileID   *uuid.UUID `gorm:"type:uuid;index"`
 	Action   string    `gorm:"type:text;not null"`
 	Vault    Vault     `gorm:"foreignKey:VaultID;constraint:OnDelete:CASCADE"`
