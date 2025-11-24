@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 	"gorm.io/gorm"
+	"strconv"
 )
 
 // CreateUserPayload captures the simple fields needed to register a user.
@@ -18,6 +19,12 @@ type CreateUserPayload struct {
 	Email    string `json:"email" example:"alice@example.com"`
 	Phone    int    `json:"phone" example:"9199990000"`
 	Password string `json:"password" example:"Secret123!"`
+}
+
+type CreateVaultPayload struct {
+	Name     string 
+	Type    string 
+	UserID int64
 }
 
 // UserResponse is returned after user creation without nested relations.
@@ -90,13 +97,18 @@ func CreateUserHandler(db *gorm.DB) http.HandlerFunc {
 // @Router /vaults/create [post]
 func CreateVaultHandler(db *gorm.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var input Vault
+		var input CreateVaultPayload
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 			http.Error(w, "invalid JSON body", http.StatusBadRequest)
 			return
 		}
 
-		vault, err := CreateVault(db, input)
+		inputVault := Vault{
+			Name: input.Name,
+			Type: input.Type,
+			UserId : input.UserID,
+		}
+		vault, err := CreateVault(db, inputVault)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -137,7 +149,7 @@ func UpdateVaultHandler(db *gorm.DB) http.HandlerFunc {
 			return
 		}
 
-		userID, err := uuid.Parse(userIDStr)
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
 			http.Error(w, "invalid user_id", http.StatusBadRequest)
 			return
@@ -186,7 +198,7 @@ func DeleteVaultHandler(db *gorm.DB) http.HandlerFunc {
 			return
 		}
 
-		userID, err := uuid.Parse(userIDStr)
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
 			http.Error(w, "invalid user_id", http.StatusBadRequest)
 			return
@@ -218,7 +230,7 @@ func ListVaultsHandler(db *gorm.DB) http.HandlerFunc {
 			return
 		}
 
-		userID, err := uuid.Parse(userIDStr)
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
 			http.Error(w, "invalid user_id", http.StatusBadRequest)
 			return

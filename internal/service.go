@@ -68,7 +68,7 @@ func CreateVault(db *gorm.DB, input Vault) (*Vault, error) {
 	return &input, nil
 }
 
-func UpdateVault(db *gorm.DB, vaultID uuid.UUID, userID uuid.UUID, updates map[string]interface{}) (*Vault, error) {
+func UpdateVault(db *gorm.DB, vaultID uuid.UUID, userID int64, updates map[string]interface{}) (*Vault, error) {
 	var vault Vault
 	if err := db.Where("id = ? AND user_id = ?", vaultID, userID).First(&vault).Error; err != nil {
 		return nil, errors.New("vault not found or not owned by user")
@@ -93,7 +93,7 @@ func UpdateVault(db *gorm.DB, vaultID uuid.UUID, userID uuid.UUID, updates map[s
 	return &vault, nil
 }
 
-func DeleteVault(db *gorm.DB, vaultID uuid.UUID, userID uuid.UUID) error {
+func DeleteVault(db *gorm.DB, vaultID uuid.UUID, userID int64) error {
 	var vault Vault
 	err := db.Where("id = ? AND user_id = ?", vaultID, userID).First(&vault).Error
 	if err != nil {
@@ -107,7 +107,7 @@ func DeleteVault(db *gorm.DB, vaultID uuid.UUID, userID uuid.UUID) error {
 	return nil
 }
 
-func ListVaults(db *gorm.DB, userID uuid.UUID) ([]Vault, error) {
+func ListVaults(db *gorm.DB, userID int64) ([]Vault, error) {
     var vaults []Vault
 
     // Fetch all vaults belonging to the user
