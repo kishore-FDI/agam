@@ -1,22 +1,5 @@
 basePath: /
-security:
-- BearerAuth: []
 definitions:
-  internal.CreateUserPayload:
-    properties:
-      email:
-        example: alice@example.com
-        type: string
-      name:
-        example: Alice
-        type: string
-      password:
-        example: Secret123!
-        type: string
-      phone:
-        example: 9199990000
-        type: integer
-    type: object
   internal.Device:
     properties:
       createdTimestamp:
@@ -32,6 +15,14 @@ definitions:
       user:
         $ref: '#/definitions/internal.User'
       userID:
+        type: integer
+    type: object
+  internal.DeviceInput:
+    properties:
+      name:
+        type: string
+      userID:
+        format: int64
         type: integer
     type: object
   internal.File:
@@ -115,6 +106,21 @@ definitions:
       phone:
         type: integer
     type: object
+  internal.UserInput:
+    properties:
+      email:
+        example: alice@example.com
+        type: string
+      name:
+        example: Alice
+        type: string
+      password:
+        example: Secret123!
+        type: string
+      phone:
+        example: 9199990000
+        type: integer
+    type: object
   internal.UserResponse:
     properties:
       createdTimestamp:
@@ -149,16 +155,28 @@ definitions:
       userId:
         type: integer
     type: object
+  internal.VaultInput:
+    properties:
+      name:
+        type: string
+      type:
+        type: string
+      userID:
+        format: int64
+        type: integer
+    type: object
   internal.VerifyOTPRequest:
     properties:
+      email:
+        type: string
       otp:
         type: string
-      user_id:
-        type: integer
     type: object
   internal.VerifyOTPResponse:
     properties:
       email:
+        type: string
+      name:
         type: string
       token:
         type: string
@@ -230,10 +248,10 @@ paths:
       parameters:
       - description: Device payload
         in: body
-        name: device
+        name: DeviceInput
         required: true
         schema:
-          $ref: '#/definitions/internal.Device'
+          $ref: '#/definitions/internal.DeviceInput'
       produces:
       - application/json
       responses:
@@ -358,10 +376,10 @@ paths:
       parameters:
       - description: User payload
         in: body
-        name: user
+        name: UserInput
         required: true
         schema:
-          $ref: '#/definitions/internal.CreateUserPayload'
+          $ref: '#/definitions/internal.UserInput'
       produces:
       - application/json
       responses:
@@ -409,10 +427,10 @@ paths:
       parameters:
       - description: Vault payload
         in: body
-        name: vault
+        name: VaultInput
         required: true
         schema:
-          $ref: '#/definitions/internal.Vault'
+          $ref: '#/definitions/internal.VaultInput'
       produces:
       - application/json
       responses:

@@ -17,11 +17,6 @@ const docTemplate = `{
     },
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
-    "security": [
-        {
-            "BearerAuth": []
-        }
-    ],
     "paths": {
         "/auth/login": {
             "post": {
@@ -121,11 +116,11 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "description": "Device payload",
-                        "name": "device",
+                        "name": "DeviceInput",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal.Device"
+                            "$ref": "#/definitions/internal.DeviceInput"
                         }
                     }
                 ],
@@ -318,11 +313,11 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "description": "User payload",
-                        "name": "user",
+                        "name": "UserInput",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal.CreateUserPayload"
+                            "$ref": "#/definitions/internal.UserInput"
                         }
                     }
                 ],
@@ -404,11 +399,11 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "description": "Vault payload",
-                        "name": "vault",
+                        "name": "VaultInput",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal.Vault"
+                            "$ref": "#/definitions/internal.VaultInput"
                         }
                     }
                 ],
@@ -528,27 +523,6 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "internal.CreateUserPayload": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "alice@example.com"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Alice"
-                },
-                "password": {
-                    "type": "string",
-                    "example": "Secret123!"
-                },
-                "phone": {
-                    "type": "integer",
-                    "example": 9199990000
-                }
-            }
-        },
         "internal.Device": {
             "type": "object",
             "properties": {
@@ -572,6 +546,18 @@ const docTemplate = `{
                 },
                 "userID": {
                     "type": "integer"
+                }
+            }
+        },
+        "internal.DeviceInput": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "integer",
+                    "format": "int64"
                 }
             }
         },
@@ -699,6 +685,27 @@ const docTemplate = `{
                 }
             }
         },
+        "internal.UserInput": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "alice@example.com"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Alice"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "Secret123!"
+                },
+                "phone": {
+                    "type": "integer",
+                    "example": 9199990000
+                }
+            }
+        },
         "internal.UserResponse": {
             "type": "object",
             "properties": {
@@ -751,14 +758,29 @@ const docTemplate = `{
                 }
             }
         },
+        "internal.VaultInput": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "integer",
+                    "format": "int64"
+                }
+            }
+        },
         "internal.VerifyOTPRequest": {
             "type": "object",
             "properties": {
-                "otp": {
+                "email": {
                     "type": "string"
                 },
-                "user_id": {
-                    "type": "integer"
+                "otp": {
+                    "type": "string"
                 }
             }
         },
@@ -766,6 +788,9 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "email": {
+                    "type": "string"
+                },
+                "name": {
                     "type": "string"
                 },
                 "token": {

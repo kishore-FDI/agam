@@ -33,3 +33,29 @@ type DeviceInput struct{
 	Name		string
 	UserID		int64
 }
+
+// LoginRequest represents the login request body
+type LoginRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+// LoginResponse represents the login response
+type LoginResponse struct {
+	Message string `json:"message"`
+	UserID  int64  `json:"user_id"`
+}
+
+// VerifyOTPRequest represents the OTP verification request
+type VerifyOTPRequest struct {
+	Email string  `json:"email"`
+	OTP    string `json:"otp"`
+}
+
+// VerifyOTPResponse represents the OTP verification response with JWT token
+type VerifyOTPResponse struct {
+	Token  string `json:"token"`
+	UserID int64  `json:"user_id"`
+	Email  string `json:"email"`
+	Name	string
+}

@@ -519,31 +519,6 @@ func isImageContentType(contentType string) bool {
 	return false
 }
 
-// LoginRequest represents the login request body
-type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-}
-
-// LoginResponse represents the login response
-type LoginResponse struct {
-	Message string `json:"message"`
-	UserID  int64  `json:"user_id"`
-}
-
-// VerifyOTPRequest represents the OTP verification request
-type VerifyOTPRequest struct {
-	UserID int64  `json:"user_id"`
-	OTP    string `json:"otp"`
-}
-
-// VerifyOTPResponse represents the OTP verification response with JWT token
-type VerifyOTPResponse struct {
-	Token  string `json:"token"`
-	UserID int64  `json:"user_id"`
-	Email  string `json:"email"`
-}
-
 // LoginHandler starts the password + OTP login flow.
 // @Summary Initiate login
 // @Tags auth
@@ -609,17 +584,17 @@ func VerifyOTPHandler(db *gorm.DB, jwtSecret string) http.HandlerFunc {
 			http.Error(w, "invalid JSON body", http.StatusBadRequest)
 			return
 		}
-
-		// Verify OTP
-		if err := VerifyOTP(req.UserID, req.OTP); err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
+		
+		var user User
+		if err := db.Where("email = ?", req.Email).First(&user).Error; err != nil {
+			http.Error(w, "invalid email", http.StatusUnauthorized)
 			return
 		}
 
-		// Get user details
-		var user User
-		if err := db.Where("id = ?", req.UserID).First(&user).Error; err != nil {
-			http.Error(w, "user not found", http.StatusNotFound)
+
+		// Verify OTP
+		if err := VerifyOTP(user.ID, req.OTP); err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
 
@@ -634,6 +609,7 @@ func VerifyOTPHandler(db *gorm.DB, jwtSecret string) http.HandlerFunc {
 		response := VerifyOTPResponse{
 			Token:  token,
 			UserID: user.ID,
+			Name: user.Name,
 			Email:  user.Email,
 		}
 
