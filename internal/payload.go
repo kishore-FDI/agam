@@ -67,3 +67,21 @@ type VerifyOTPResponse struct {
 	Email  string `json:"email"`
 	Name	string
 }
+
+// Thumbnail for vaults 
+type Thumbnail struct {
+	FileID				uuid.UUID
+	ThumbnailURL		string
+}
+
+type ThumbnailDate struct {
+	Date time.Time
+	Objects	[]Thumbnail
+}
+
+type ThumbnailResponse struct {
+	UserID		int64
+	VaultID		uuid.UUID
+	Thumbnails	[]ThumbnailDate
+}
+

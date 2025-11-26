@@ -12,6 +12,8 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 	"strings"
+	"sort"
+	"net/url"
 )
 
 
@@ -361,5 +363,74 @@ func generateThumbnail(data []byte) ([]byte, error) {
     }
 
     return buf.Bytes(), nil
+}
+
+// Service to generate thumbnails for image vaults
+func GetThumbnail(db *gorm.DB, minioClient *minio.Client, vaultID uuid.UUID, userID int64) (*ThumbnailResponse, error) {
+	var vault Vault
+
+	//Load vault + files
+	err := db.
+		Preload("Files").
+		Where("id = ? AND user_id = ?", vaultID, userID).
+		First(&vault).Error
+	if err != nil {
+		return nil, errors.New("vault not found")
+	}
+
+	bucket := fmt.Sprintf("user-%d", userID)
+
+	// Group by date
+	dateMap := make(map[string][]Thumbnail)
+
+	for _, f := range vault.Files {
+		if f.Thumbnail == "" {
+			continue
+		}
+
+		reqParams := make(url.Values)
+
+		presignedURL, err := minioClient.PresignedGetObject(
+			context.Background(),
+			bucket,
+			f.Thumbnail,
+			time.Hour*24,
+			reqParams,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate thumbnail URL: %w", err)
+		}
+
+		thumb := Thumbnail{
+			FileID:       f.ID,
+			ThumbnailURL: presignedURL.String(),
+		}
+
+
+		day := f.Date.Format("2006-01-02")
+		dateMap[day] = append(dateMap[day], thumb)
+	}
+
+	// Convert map → []ThumbnailDate (sorted)
+	var grouped []ThumbnailDate
+	for day, objects := range dateMap {
+		parsed, _ := time.Parse("2006-01-02", day)
+		grouped = append(grouped, ThumbnailDate{
+			Date:    parsed,
+			Objects: objects,
+		})
+	}
+
+	// Sort latest date first
+	sort.Slice(grouped, func(i, j int) bool {
+		return grouped[i].Date.After(grouped[j].Date)
+	})
+
+	return &ThumbnailResponse{
+		UserID:     userID,
+		VaultID:    vaultID,
+		Thumbnails: grouped,
+	}, nil
 }
 

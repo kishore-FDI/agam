@@ -20,6 +20,7 @@ type Config struct {
 	SMTPUser   string
 	SMTPPassword string
 	SMTPFrom   string
+	BaseURL		string
 }
 
 
@@ -43,5 +44,6 @@ func LoadConfig() *Config {
 		SMTPUser:   os.Getenv("SMTP_USER"),
 		SMTPPassword: os.Getenv("SMTP_PASSWORD"),
 		SMTPFrom:   os.Getenv("SMTP_FROM"),
+		BaseURL:	os.Getenv("BASE_URL"),
 	}
 }

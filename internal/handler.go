@@ -265,41 +265,41 @@ func ListVaultsHandler(db *gorm.DB) http.HandlerFunc {
 // @Success 200 {array} VaultInput
 // @Failure 400 {string} string
 // @Router /thumbnail [get]
-// func GetVaultThumbnail(db *gorm.DB) http.HandlerFunc {
-// 	return func(w http.ResponseWriter, r *http.Request) {
+func GetVaultThumbnail(db *gorm.DB, minioClient *minio.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
 		
-// 		userIDStr := r.URL.Query().Get("userId")
+		userIDStr := r.URL.Query().Get("userId")
 
-// 		if userIDStr == "" {
-// 			http.Error(w, "user_id is required", http.StatusBadRequest)
-// 			return
-// 		}
+		if userIDStr == "" {
+			http.Error(w, "user_id is required", http.StatusBadRequest)
+			return
+		}
 
-// 		userID, err := strconv.ParseInt(userIDStr, 10, 64)
+		userID, err := strconv.ParseInt(userIDStr, 10, 64)
 
-// 		if err != nil {
-// 			http.Error(w, "invalid user_id", http.StatusBadRequest)
-// 			return
-// 		}
+		if err != nil {
+			http.Error(w, "invalid user_id", http.StatusBadRequest)
+			return
+		}
 
 
-// 		vaultIDStr := r.FormValue("vault_id")
-// 		vaultID, err := uuid.Parse(vaultIDStr)
-// 		if err != nil {
-// 			http.Error(w, "invalid vault_id", http.StatusBadRequest)
-// 			return
-// 		}
+		vaultIDStr := r.FormValue("vault_id")
+		vaultID, err := uuid.Parse(vaultIDStr)
+		if err != nil {
+			http.Error(w, "invalid vault_id", http.StatusBadRequest)
+			return
+		}
 
-// 		thumbnail, err := GetThumbnail(db, userID, vaultID)
-// 		if err != nil {
-// 			http.Error(w, err.Error(), http.StatusInternalServerError)
-// 			return
-// 		}
+		thumbnail, err := GetThumbnail(db, minioClient, vaultID, userID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 
-// 		w.Header().Set("Content-Type", "application/json")
-// 		json.NewEncoder(w).Encode(thu)
-// 	}
-// }
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(thumbnail)
+	}
+}
 
 // UploadFileHandler uploads an image into a vault.
 // @Summary Upload file
