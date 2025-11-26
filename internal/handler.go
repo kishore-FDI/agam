@@ -263,7 +263,7 @@ func ListVaultsHandler(db *gorm.DB) http.HandlerFunc {
 // @Success 201 {object} File
 // @Failure 400 {string} string
 // @Router /files/upload [post]
-func UploadFileHandler(db *gorm.DB, minioClient *minio.Client, bucketName string) http.HandlerFunc {
+func UploadFileHandler(db *gorm.DB, minioClient *minio.Client,) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Parse multipart form (max 32MB)
 		err := r.ParseMultipartForm(32 << 20)
@@ -327,8 +327,8 @@ func UploadFileHandler(db *gorm.DB, minioClient *minio.Client, bucketName string
 		// Determine content type
 		contentType := header.Header.Get("Content-Type")
 		if contentType == "" {
-			// Try to infer from extension
-			ext := filepath.Ext(header.Filename)
+			ext := strings.ToLower(filepath.Ext(header.Filename))
+
 			switch ext {
 			case ".jpg", ".jpeg":
 				contentType = "image/jpeg"
@@ -338,16 +338,32 @@ func UploadFileHandler(db *gorm.DB, minioClient *minio.Client, bucketName string
 				contentType = "image/gif"
 			case ".webp":
 				contentType = "image/webp"
+
+			case ".pdf":
+				contentType = "application/pdf"
+			case ".doc":
+				contentType = "application/msword"
+			case ".docx":
+				contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+			case ".xls":
+				contentType = "application/vnd.ms-excel"
+			case ".xlsx":
+				contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+			case ".md":
+				contentType = "text/markdown"
+
 			default:
 				contentType = "application/octet-stream"
 			}
 		}
 
+
 		// Validate it's an image
-		if !isImageContentType(contentType) {
-			http.Error(w, "file must be an image", http.StatusBadRequest)
-			return
-		}
+		// if !isImageContentType(contentType) {
+		// 	http.Error(w, "file must be an image", http.StatusBadRequest)
+		// 	return
+		// }
 
 		// Create file input
 		fileInput := File{
@@ -360,7 +376,7 @@ func UploadFileHandler(db *gorm.DB, minioClient *minio.Client, bucketName string
 		}
 
 		// Upload file
-		uploadedFile, err := UploadFile(db, minioClient, bucketName, fileInput, fileData, contentType, deviceID)
+		uploadedFile, err := UploadFile(db, minioClient, fileInput, fileData, contentType, deviceID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -382,7 +398,7 @@ func UploadFileHandler(db *gorm.DB, minioClient *minio.Client, bucketName string
 // @Success 204 "No Content"
 // @Failure 400 {string} string
 // @Router /files/delete [delete]
-func DeleteFileHandler(db *gorm.DB, minioClient *minio.Client, bucketName string) http.HandlerFunc {
+func DeleteFileHandler(db *gorm.DB, minioClient *minio.Client,string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fileIDStr := r.URL.Query().Get("file_id")
 		vaultIDStr := r.URL.Query().Get("vault_id")
@@ -411,7 +427,7 @@ func DeleteFileHandler(db *gorm.DB, minioClient *minio.Client, bucketName string
 			return
 		}
 
-		if err := DeleteFile(db, minioClient, bucketName, fileID, vaultID, deviceID); err != nil {
+		if err := DeleteFile(db, minioClient, fileID, vaultID, deviceID); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}

@@ -136,13 +136,39 @@ func RegisterDevice(db *gorm.DB, input Device) (*Device, error) {
 	return &input, nil
 }
 
-func UploadFile(db *gorm.DB, minioClient *minio.Client, bucketName string, input File, fileData []byte, contentType string, deviceID uuid.UUID) (*File, error) {
+func UploadFile(db *gorm.DB, minioClient *minio.Client, input File, fileData []byte, contentType string, deviceID uuid.UUID) (*File, error) {
+	
+	ctx := context.Background()
+	// Verify vault exists
+	var vault Vault
+	if err := db.Where("id = ?", input.VaultID).First(&vault).Error; err != nil {
+		return nil, errors.New("vault not found")
+	}
+	
 	// Generate unique key for MinIO storage
 	fileKey := fmt.Sprintf("%s/%s/%s", input.VaultID.String(), uuid.New().String(), input.Name)
 	
+	var currentDevice Device;
+	if err := db.Where("id = ?", deviceID).First(&currentDevice).Error; err != nil {
+		return nil, errors.New("Device not found")
+	}
+
+	// Derive user bucket
+	userBucket := fmt.Sprintf("user-%s", currentDevice.UserID.String())
+
+	// Create bucket if not exists
+	exists, err := minioClient.BucketExists(ctx, userBucket)
+	if err != nil {
+		return nil, fmt.Errorf("failed checking bucket: %w", err)
+	}
+	if !exists {
+		if err := minioClient.MakeBucket(ctx, userBucket, minio.MakeBucketOptions{}); err != nil {
+			return nil, fmt.Errorf("failed creating bucket: %w", err)
+		}
+	}
+	
 	// Upload to MinIO
-	ctx := context.Background()
-	_, err := minioClient.PutObject(ctx, bucketName, fileKey, bytes.NewReader(fileData), int64(len(fileData)), minio.PutObjectOptions{
+	_, err := minioClient.PutObject(ctx, userBucket, fileKey, bytes.NewReader(fileData), int64(len(fileData)), minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 	if err != nil {
@@ -157,46 +183,35 @@ func UploadFile(db *gorm.DB, minioClient *minio.Client, bucketName string, input
 	input.Size = len(fileData)
 	input.Type = contentType
 
-	// Verify vault exists
-	var vault Vault
-	if err := db.Where("id = ?", input.VaultID).First(&vault).Error; err != nil {
-		// If file was uploaded but vault doesn't exist, try to clean up
-		minioClient.RemoveObject(ctx, bucketName, fileKey, minio.RemoveObjectOptions{})
-		return nil, errors.New("vault not found")
-	}
-
 	// Save to database
 	if err := db.Create(&input).Error; err != nil {
 		// Clean up MinIO object if DB insert fails
-		minioClient.RemoveObject(ctx, bucketName, fileKey, minio.RemoveObjectOptions{})
+		minioClient.RemoveObject(ctx, userBucket, fileKey, minio.RemoveObjectOptions{})
 		return nil, fmt.Errorf("failed to save file to database: %w", err)
 	}
 
-	// Get the device that made the change to find its user
-	var currentDevice Device
-	if err := db.Where("id = ?", deviceID).First(&currentDevice).Error; err == nil {
-		// Create sync logs for all other devices of the same user (excluding the device that made the change)
-		var otherDevices []Device
-		if err := db.Where("user_id = ? AND id != ?", currentDevice.UserID, deviceID).Find(&otherDevices).Error; err == nil {
-			for _, device := range otherDevices {
-				syncLog := SyncLog{
-					ID:          uuid.New(),
-					VaultID:     input.VaultID,
-					FolderID:    input.FolderID,
-					FileID:      &input.ID,
-					DeviceID:    device.ID,
-					Action:      "create",
-					LastUpdated: time.Now(),
-				}
-				db.Create(&syncLog)
+	// Create sync logs for all other devices of the same user (excluding the device that made the change)
+	var otherDevices []Device
+	if err := db.Where("user_id = ? AND id != ?", currentDevice.UserID, deviceID).Find(&otherDevices).Error; err == nil {
+		for _, device := range otherDevices {
+			syncLog := SyncLog{
+				ID:          uuid.New(),
+				VaultID:     input.VaultID,
+				FolderID:    input.FolderID,
+				FileID:      &input.ID,
+				DeviceID:    device.ID,
+				Action:      "create",
+				LastUpdated: time.Now(),
 			}
+			db.Create(&syncLog)
 		}
 	}
+
 
 	return &input, nil
 }
 
-func DeleteFile(db *gorm.DB, minioClient *minio.Client, bucketName string, fileID uuid.UUID, vaultID uuid.UUID, deviceID uuid.UUID) error {
+func DeleteFile(db *gorm.DB, minioClient *minio.Client, fileID uuid.UUID, vaultID uuid.UUID, deviceID uuid.UUID) error {
 	// Verify file exists and belongs to vault
 	var file File
 	if err := db.Where("id = ? AND vault_id = ?", fileID, vaultID).First(&file).Error; err != nil {
@@ -206,15 +221,23 @@ func DeleteFile(db *gorm.DB, minioClient *minio.Client, bucketName string, fileI
 	// Store file info before deletion for sync log
 	folderID := file.FolderID
 
+	var currentDevice Device;
+	if err := db.Where("id = ?", deviceID).First(&currentDevice).Error; err != nil {
+		return nil, errors.New("Device not found")
+	}
+
+	// Derive user bucket
+	userBucket := fmt.Sprintf("user-%s", currentDevice.UserID.String())
+
 	// Delete from MinIO
 	ctx := context.Background()
-	if err := minioClient.RemoveObject(ctx, bucketName, file.MinioKey, minio.RemoveObjectOptions{}); err != nil {
+	if err := minioClient.RemoveObject(ctx, userBucket, file.MinioKey, minio.RemoveObjectOptions{}); err != nil {
 		return fmt.Errorf("failed to delete file from MinIO: %w", err)
 	}
 
 	// Delete thumbnail if exists
 	if file.Thumbnail != "" {
-		minioClient.RemoveObject(ctx, bucketName, file.Thumbnail, minio.RemoveObjectOptions{})
+		minioClient.RemoveObject(ctx, userBucket, file.Thumbnail, minio.RemoveObjectOptions{})
 	}
 
 	// Delete from database
@@ -222,24 +245,21 @@ func DeleteFile(db *gorm.DB, minioClient *minio.Client, bucketName string, fileI
 		return fmt.Errorf("failed to delete file from database: %w", err)
 	}
 
-	// Get the device that made the change to find its user
-	var currentDevice Device
-	if err := db.Where("id = ?", deviceID).First(&currentDevice).Error; err == nil {
-		// Create sync logs for all other devices of the same user (excluding the device that made the change)
-		var otherDevices []Device
-		if err := db.Where("user_id = ? AND id != ?", currentDevice.UserID, deviceID).Find(&otherDevices).Error; err == nil {
-			for _, device := range otherDevices {
-				syncLog := SyncLog{
-					ID:          uuid.New(),
-					VaultID:     vaultID,
-					FolderID:    folderID,
-					FileID:      &fileID,
-					DeviceID:    device.ID,
-					Action:      "delete",
-					LastUpdated: time.Now(),
-				}
-				db.Create(&syncLog)
+
+	// Create sync logs for all other devices of the same user (excluding the device that made the change)
+	var otherDevices []Device
+	if err := db.Where("user_id = ? AND id != ?", currentDevice.UserID, deviceID).Find(&otherDevices).Error; err == nil {
+		for _, device := range otherDevices {
+			syncLog := SyncLog{
+				ID:          uuid.New(),
+				VaultID:     vaultID,
+				FolderID:    folderID,
+				FileID:      &fileID,
+				DeviceID:    device.ID,
+				Action:      "delete",
+				LastUpdated: time.Now(),
 			}
+			db.Create(&syncLog)
 		}
 	}
 
