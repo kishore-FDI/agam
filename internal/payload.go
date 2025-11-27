@@ -72,6 +72,7 @@ type VerifyOTPResponse struct {
 type Thumbnail struct {
 	FileID				uuid.UUID
 	ThumbnailURL		string
+	Name				string
 }
 
 type ThumbnailDate struct {

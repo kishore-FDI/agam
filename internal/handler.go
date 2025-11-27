@@ -11,6 +11,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"gorm.io/gorm"
 	"strconv"
+	"log"
 )
 
 // CreateUserHandler registers a new user account.
@@ -282,13 +283,19 @@ func GetVaultThumbnail(db *gorm.DB, minioClient *minio.Client) http.HandlerFunc 
 			return
 		}
 
+		vaultIDStr := r.URL.Query().Get("vaultId")
+        if vaultIDStr == "" {
+            http.Error(w, "vault_id is required", http.StatusBadRequest)
+            return
+        }
 
-		vaultIDStr := r.FormValue("vault_id")
-		vaultID, err := uuid.Parse(vaultIDStr)
-		if err != nil {
-			http.Error(w, "invalid vault_id", http.StatusBadRequest)
-			return
-		}
+        vaultID, err := uuid.Parse(vaultIDStr)
+        if err != nil {
+            log.Printf("%v", err)
+            http.Error(w, "invalid vault_id", http.StatusBadRequest)
+            return
+        }
+
 
 		thumbnail, err := GetThumbnail(db, minioClient, vaultID, userID)
 		if err != nil {

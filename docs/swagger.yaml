@@ -368,6 +368,37 @@ paths:
       summary: Upload file
       tags:
       - files
+  /thumbnail:
+    get:
+      parameters:
+      - description: Owner user ID
+        in: query
+        name: userId
+        required: true
+        type: string
+      - description: Vault ID
+        in: query
+        name: vaultId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/internal.VaultInput'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: List vaults
+      tags:
+      - vaults
   /users:
     post:
       consumes:

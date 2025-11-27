@@ -33,7 +33,7 @@ func SetupRouter(db *gorm.DB, minio *minio.Client, bucketName string, jwtSecret 
 		r.Delete("/vaults/delete", DeleteVaultHandler(db))
 		r.Get("/vaults", ListVaultsHandler(db))
 
-		// r.Get("/thumbnail", GetVaultThumbnail(db,minio))
+		r.Get("/thumbnail", GetVaultThumbnail(db,minio))
 
 		// Device routes
 		r.Post("/devices/register", RegisterDeviceHandler(db))

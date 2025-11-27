@@ -13,7 +13,8 @@ import (
 	"gorm.io/gorm"
 	"strings"
 	"sort"
-	"net/url"
+	"log"
+
 )
 
 
@@ -180,6 +181,8 @@ func UploadFile(db *gorm.DB, minioClient *minio.Client, input File, fileData []b
 	
 	// Check if the file is an image
 	isImage := strings.HasPrefix(contentType, "image/")
+	log.Printf(contentType)
+	log.Printf(fmt.Sprintf("%v",isImage))
 
 	var thumbKey string
 
@@ -315,10 +318,12 @@ func SyncChanges(db *gorm.DB, deviceID uuid.UUID, lastSyncTime *time.Time) ([]Sy
 
 	// Build query for sync logs
 	query := db.Where("device_id = ?", deviceID)
+	log.Printf(fmt.Sprintf("%v",query))
 	
 	// If lastSyncTime is provided, only get logs after that time
 	if lastSyncTime != nil {
 		query = query.Where("last_updated > ?", *lastSyncTime)
+		log.Printf(fmt.Sprintf("%v",query))
 	}
 
 	// Order by last_updated ascending
@@ -329,6 +334,7 @@ func SyncChanges(db *gorm.DB, deviceID uuid.UUID, lastSyncTime *time.Time) ([]Sy
 		return nil, fmt.Errorf("failed to fetch sync logs: %w", err)
 	}
 
+	log.Printf(fmt.Sprintf("%v",len(syncLogs)))
 	// Build response with file details
 	responses := make([]SyncLogResponse, len(syncLogs))
 	for i, log := range syncLogs {
@@ -384,33 +390,29 @@ func GetThumbnail(db *gorm.DB, minioClient *minio.Client, vaultID uuid.UUID, use
 	dateMap := make(map[string][]Thumbnail)
 
 	for _, f := range vault.Files {
-		if f.Thumbnail == "" {
-			continue
-		}
-
-		reqParams := make(url.Values)
-
-		presignedURL, err := minioClient.PresignedGetObject(
-			context.Background(),
-			bucket,
-			f.Thumbnail,
-			time.Hour*24,
-			reqParams,
-		)
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate thumbnail URL: %w", err)
-		}
-
 		thumb := Thumbnail{
-			FileID:       f.ID,
-			ThumbnailURL: presignedURL.String(),
+			FileID: f.ID,
+			Name:   f.Name,
 		}
 
+		if f.Thumbnail != "" {
+			presignedURL, err := minioClient.PresignedGetObject(
+				context.Background(),
+				bucket,
+				f.Thumbnail,
+				24*time.Hour,
+				nil,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate thumbnail URL: %w", err)
+			}
+			thumb.ThumbnailURL = presignedURL.String()
+		}
 
 		day := f.Date.Format("2006-01-02")
 		dateMap[day] = append(dateMap[day], thumb)
 	}
+
 
 	// Convert map → []ThumbnailDate (sorted)
 	var grouped []ThumbnailDate
