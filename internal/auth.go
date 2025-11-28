@@ -15,8 +15,8 @@ import (
 
 // otpStore stores OTPs in memory with expiration
 type otpStore struct {
-	mu    sync.RWMutex
-	otps  map[int64]otpEntry
+	mu   sync.RWMutex
+	otps map[string]otpEntry
 }
 
 type otpEntry struct {
@@ -25,7 +25,7 @@ type otpEntry struct {
 }
 
 var globalOTPStore = &otpStore{
-	otps: make(map[int64]otpEntry),
+	otps: make(map[string]otpEntry),
 }
 
 // cleanupExpiredOTPs removes expired OTPs from memory
@@ -34,9 +34,9 @@ func (s *otpStore) cleanupExpiredOTPs() {
 	defer s.mu.Unlock()
 	
 	now := time.Now()
-	for userID, entry := range s.otps {
+	for key, entry := range s.otps {
 		if now.After(entry.expiresAt) {
-			delete(s.otps, userID)
+			delete(s.otps, key)
 		}
 	}
 }
@@ -134,7 +134,7 @@ func SendEmail(cfg *Config, to, subject, body string) error {
 }
 
 // SendOTP generates and stores an OTP in memory, then sends it via email
-func SendOTP(cfg *Config, userID int64, email string) (string, error) {
+func SendOTP(cfg *Config, key string, email string) (string, error) {
 	// Generate OTP
 	otpCode, err := GenerateOTP()
 	if err != nil {
@@ -146,7 +146,7 @@ func SendOTP(cfg *Config, userID int64, email string) (string, error) {
 
 	// Store OTP in memory
 	globalOTPStore.mu.Lock()
-	globalOTPStore.otps[userID] = otpEntry{
+	globalOTPStore.otps[key] = otpEntry{
 		code:      otpCode,
 		expiresAt: time.Now().Add(10 * time.Minute), // OTP expires in 10 minutes
 	}
@@ -165,9 +165,9 @@ func SendOTP(cfg *Config, userID int64, email string) (string, error) {
 }
 
 // VerifyOTP verifies an OTP code for a user from memory
-func VerifyOTP(userID int64, otpCode string) error {
+func VerifyOTP(key string, otpCode string) error {
 	globalOTPStore.mu.RLock()
-	entry, exists := globalOTPStore.otps[userID]
+	entry, exists := globalOTPStore.otps[key]
 	globalOTPStore.mu.RUnlock()
 
 	if !exists {
@@ -178,7 +178,7 @@ func VerifyOTP(userID int64, otpCode string) error {
 	if time.Now().After(entry.expiresAt) {
 		// Remove expired OTP
 		globalOTPStore.mu.Lock()
-		delete(globalOTPStore.otps, userID)
+		delete(globalOTPStore.otps, key)
 		globalOTPStore.mu.Unlock()
 		return errors.New("OTP has expired")
 	}
@@ -190,9 +190,17 @@ func VerifyOTP(userID int64, otpCode string) error {
 
 	// Remove OTP after successful verification (one-time use)
 	globalOTPStore.mu.Lock()
-	delete(globalOTPStore.otps, userID)
+	delete(globalOTPStore.otps, key)
 	globalOTPStore.mu.Unlock()
 
 	return nil
+}
+
+func userOTPKey(userID int64) string {
+	return fmt.Sprintf("user:%d", userID)
+}
+
+func registrationOTPKey(email string) string {
+	return fmt.Sprintf("registration:%s", normalizeEmail(email))
 }
 

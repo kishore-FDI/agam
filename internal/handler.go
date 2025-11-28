@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -14,17 +15,17 @@ import (
 	"log"
 )
 
-// CreateUserHandler registers a new user account.
-// @Summary Register user
-// @Description Creates a new user account with the provided credentials.
+// CreateUserHandler starts the user registration flow by sending an email OTP.
+// @Summary Start registration
+// @Description Initiates user registration by validating the payload, staging it temporarily, and emailing an OTP. Call /users/verify-otp to finalize creation.
 // @Tags users
 // @Accept json
 // @Produce json
 // @Param UserInput body UserInput true "User payload"
-// @Success 201 {object} UserResponse
+// @Success 202 {object} map[string]string
 // @Failure 400 {string} string
 // @Router /users [post]
-func CreateUserHandler(db *gorm.DB) http.HandlerFunc {
+func CreateUserHandler(db *gorm.DB, cfg *Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Parse incoming JSON body
@@ -34,52 +35,91 @@ func CreateUserHandler(db *gorm.DB) http.HandlerFunc {
 			return
 		}
 
-		userInput := User{
-			Name:     input.Name,
-			Email:    input.Email,
-			Phone:    input.Phone,
-			Password: input.Password,
+		input.Name = strings.TrimSpace(input.Name)
+		input.Email = strings.TrimSpace(input.Email)
+
+		if err := validateUserRegistrationInput(input); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 
-		// Call service layer
+		if err := ensureUserUniqueness(db, input.Email, input.Phone); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		savePendingUser(input, defaultPendingUserTTL)
+
+		otpKey := registrationOTPKey(input.Email)
+		if _, err := SendOTP(cfg, otpKey, input.Email); err != nil {
+			http.Error(w, "failed to send OTP: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		resp := map[string]string{
+			"message": "OTP sent to your email. Verify to complete registration.",
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		json.NewEncoder(w).Encode(resp)
+	}
+}
+
+// VerifyUserRegistrationHandler completes registration after OTP validation.
+// @Summary Verify registration OTP
+// @Description Validates the OTP sent during registration and creates the user record.
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param payload body VerifyUserRegistrationRequest true "Verification payload"
+// @Success 201 {object} UserResponse
+// @Failure 400 {string} string
+// @Router /users/verify-otp [post]
+func VerifyUserRegistrationHandler(db *gorm.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req VerifyUserRegistrationRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid JSON body", http.StatusBadRequest)
+			return
+		}
+
+		if req.Email == "" || req.OTP == "" {
+			http.Error(w, "email and otp are required", http.StatusBadRequest)
+			return
+		}
+
+		pending, err := getPendingUser(req.Email)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		if err := VerifyOTP(registrationOTPKey(req.Email), req.OTP); err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		userInput := User{
+			Name:     pending.Name,
+			Email:    pending.Email,
+			Phone:    pending.Phone,
+			Password: pending.Password,
+		}
+
 		user, err := CreateUser(db, userInput)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		vaults := []Vault{
-			{
-				Name:   "Memories",
-				Type:   "images",
-				UserId: user.ID,
-			},
-			{
-				Name:   "Thoughts",
-				Type:   "texts",
-				UserId: user.ID,
-			},
-			{
-				Name:   "Echoes",
-				Type:   "audios",
-				UserId: user.ID,
-			},
-			{
-				Name:   "Documents",
-				Type:   "documents",
-				UserId: user.ID,
-			},
+		deletePendingUser(req.Email)
+
+		if err := seedDefaultVaults(db, user.ID); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 
-		for _, v := range vaults {
-			_, err := CreateVault(db, v)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-		}
-
-		// Respond with created user (no nested data)
 		resp := UserResponse{
 			ID:               user.ID,
 			Name:             user.Name,
@@ -624,7 +664,7 @@ func LoginHandler(db *gorm.DB, cfg *Config) http.HandlerFunc {
 		}
 
 		// Send OTP
-		_, err := SendOTP(cfg, user.ID, user.Email)
+		_, err := SendOTP(cfg, userOTPKey(user.ID), user.Email)
 		if err != nil {
 			http.Error(w, "failed to send OTP: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -667,7 +707,7 @@ func VerifyOTPHandler(db *gorm.DB, jwtSecret string) http.HandlerFunc {
 
 
 		// Verify OTP
-		if err := VerifyOTP(user.ID, req.OTP); err != nil {
+		if err := VerifyOTP(userOTPKey(user.ID), req.OTP); err != nil {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -691,4 +731,72 @@ func VerifyOTPHandler(db *gorm.DB, jwtSecret string) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(response)
 	}
+}
+
+func validateUserRegistrationInput(input UserInput) error {
+	if strings.TrimSpace(input.Name) == "" {
+		return errors.New("name is required")
+	}
+	if strings.TrimSpace(input.Email) == "" {
+		return errors.New("email is required")
+	}
+	if input.Phone == 0 {
+		return errors.New("phone is required")
+	}
+	if strings.TrimSpace(input.Password) == "" {
+		return errors.New("password is required")
+	}
+	return nil
+}
+
+func ensureUserUniqueness(db *gorm.DB, email string, phone int) error {
+	var existing User
+	if err := db.Where("email = ?", email).First(&existing).Error; err == nil {
+		return errors.New("email already registered")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+
+	if phone != 0 {
+		if err := db.Where("phone = ?", phone).First(&existing).Error; err == nil {
+			return errors.New("phone number already registered")
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func seedDefaultVaults(db *gorm.DB, userID int64) error {
+	vaults := []Vault{
+		{
+			Name:   "Memories",
+			Type:   "images",
+			UserId: userID,
+		},
+		{
+			Name:   "Thoughts",
+			Type:   "texts",
+			UserId: userID,
+		},
+		{
+			Name:   "Echoes",
+			Type:   "audios",
+			UserId: userID,
+		},
+		{
+			Name:   "Documents",
+			Type:   "documents",
+			UserId: userID,
+		},
+	}
+
+	for _, v := range vaults {
+		if _, err := CreateVault(db, v); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

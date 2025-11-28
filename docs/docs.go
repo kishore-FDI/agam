@@ -348,7 +348,7 @@ const docTemplate = `{
         },
         "/users": {
             "post": {
-                "description": "Creates a new user account with the provided credentials.",
+                "description": "Initiates user registration by validating the payload, staging it temporarily, and emailing an OTP. Call /users/verify-otp to finalize creation.",
                 "consumes": [
                     "application/json"
                 ],
@@ -358,7 +358,7 @@ const docTemplate = `{
                 "tags": [
                     "users"
                 ],
-                "summary": "Register user",
+                "summary": "Start registration",
                 "parameters": [
                     {
                         "description": "User payload",
@@ -367,6 +367,49 @@ const docTemplate = `{
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/internal.UserInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Accepted",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/verify-otp": {
+            "post": {
+                "description": "Validates the OTP sent during registration and creates the user record.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Verify registration OTP",
+                "parameters": [
+                    {
+                        "description": "Verification payload",
+                        "name": "payload",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal.VerifyUserRegistrationRequest"
                         }
                     }
                 ],
@@ -847,6 +890,17 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "internal.VerifyUserRegistrationRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "otp": {
+                    "type": "string"
                 }
             }
         }

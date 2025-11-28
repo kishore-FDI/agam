@@ -37,6 +37,12 @@ type UserResponse struct {
 	CreatedTimestamp time.Time `json:"createdTimestamp"`
 }
 
+// VerifyUserRegistrationRequest carries the OTP verification payload for registration.
+type VerifyUserRegistrationRequest struct {
+	Email string `json:"email"`
+	OTP   string `json:"otp"`
+}
+
 type DeviceInput struct{
 	Name		string
 	UserID		int64

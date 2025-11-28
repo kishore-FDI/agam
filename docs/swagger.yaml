@@ -183,6 +183,13 @@ definitions:
       user_id:
         type: integer
     type: object
+  internal.VerifyUserRegistrationRequest:
+    properties:
+      email:
+        type: string
+      otp:
+        type: string
+    type: object
 info:
   contact:
     email: support@agam.local
@@ -403,7 +410,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Creates a new user account with the provided credentials.
+      description: Initiates user registration by validating the payload, staging
+        it temporarily, and emailing an OTP. Call /users/verify-otp to finalize creation.
       parameters:
       - description: User payload
         in: body
@@ -411,6 +419,35 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/internal.UserInput'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+      summary: Start registration
+      tags:
+      - users
+  /users/verify-otp:
+    post:
+      consumes:
+      - application/json
+      description: Validates the OTP sent during registration and creates the user
+        record.
+      parameters:
+      - description: Verification payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          $ref: '#/definitions/internal.VerifyUserRegistrationRequest'
       produces:
       - application/json
       responses:
@@ -422,7 +459,7 @@ paths:
           description: Bad Request
           schema:
             type: string
-      summary: Register user
+      summary: Verify registration OTP
       tags:
       - users
   /vaults:

@@ -19,7 +19,8 @@ func SetupRouter(db *gorm.DB, minio *minio.Client, bucketName string, jwtSecret 
 	})
 
 	// Public routes - no authentication required
-	r.Post("/users", CreateUserHandler(db))
+	r.Post("/users", CreateUserHandler(db, cfg))
+	r.Post("/users/verify-otp", VerifyUserRegistrationHandler(db))
 	r.Post("/auth/login", LoginHandler(db, cfg))
 	r.Post("/auth/verify-otp", VerifyOTPHandler(db, jwtSecret))
 
