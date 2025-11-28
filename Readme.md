@@ -1,6 +1,12 @@
-<p style="text-align: center;">
-  <img src="resources/agam.png" alt="Agam Logo" width="250" />
+<p style="text-align: right; margin-top: 8px;">
+  <a href="https://whencut.in" target="_blank" rel="noopener noreferrer">By whencut.in</a>
 </p>
+
+<div style="text-align: center;">
+  <a href="https://whencut.in" target="_blank" rel="noopener noreferrer">
+    <img src="resources/agam.png" alt="Agam Logo" width="250" />
+  </a>
+</div>
 
 
 ---
